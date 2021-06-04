@@ -5,6 +5,10 @@
 #include <string>
 #include <fstream>
 #include <omp.h>
+#include <boost/iostreams/filter/lzma.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
+#include <boost/iostreams/filtering_stream.hpp>
+#include <boost/iostreams/device/file.hpp>
 
 #include <ReadInputFiles.h>
 #include <FitFrac.h>
@@ -13,6 +17,7 @@
 string VERSION("1.1");
 
 using namespace std;
+namespace io = boost::iostreams;
 
 /***Function declarations ****/
 void get_gene_expression_level(double *n_c, double *N_c, double n, double vmin, double vmax, double &mu, double &var_mu, double *delta, double *var_delta, int C, int numbin, double a, double b, double *lik);
@@ -43,9 +48,11 @@ int main (int argc, char** argv){
 	map<int,int> gene_idx;
 
 	if (in_file_extension == "mtx"){
+	  printf("MTX load\n");
 		Get_G_C_MTX(in_file, N_rows, G, C, gene_idx);
 		printf("There were %d rows\n", N_rows);
-	} else { 
+	} else {
+	  printf("non-MTX load\n");
 		Get_G_C_UMIcountMatrix(in_file, N_rows, G, C, N_char);
 		printf("There were %d rows\n", N_rows);
 	}
@@ -112,10 +119,19 @@ int main (int argc, char** argv){
 
 	cout << "Print output\n";
 	// Write log expression table and error bars table
-	ofstream out_exp_lev, out_d_exp_lev;
-	out_exp_lev.open(out_folder + "log_transcription_quotients.txt",ios::out);
-	out_d_exp_lev.open(out_folder + "ltq_error_bars.txt",ios::out);
+	//ofstream out_exp_lev, out_d_exp_lev;
+	//out_exp_lev.open(out_folder + "log_transcription_quotients.txt",ios::out);
+	//out_d_exp_lev.open(out_folder + "ltq_error_bars.txt",ios::out);
 
+	io::filtering_ostream out_exp_lev, out_d_exp_lev;
+	io::file_sink ofs_exp(out_folder + "log_transcription_quotients.txt.gz",ios::out);
+	io::file_sink ofs_d_exp(out_folder + "ltq_error_bars.txt.gz",ios::out);
+	out_exp_lev.push(io::gzip_compressor());
+	out_d_exp_lev.push(io::gzip_compressor());
+	out_exp_lev.push(ofs_exp);
+	out_d_exp_lev.push(ofs_d_exp);
+
+	
 	out_exp_lev << "GeneID";
 	out_d_exp_lev << "GeneID";
     for(c=0;c<C;c++){
@@ -137,8 +153,8 @@ int main (int argc, char** argv){
 			out_d_exp_lev << "\n";
 		}
 	}
-	out_exp_lev.close();
-	out_d_exp_lev.close();
+	out_exp_lev.reset();
+	out_d_exp_lev.reset();
 
 	if ( print_extended_output ){
 		
